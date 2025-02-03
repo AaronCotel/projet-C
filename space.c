@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include "page_accueil_sdl.h"
+#include "amelioration_selection.h"
+
 
 
 // Dimensions de la fenêtre
@@ -46,6 +48,8 @@ typedef struct {
     SDL_Surface* surface;
 } Entity;
 
+Entity ennemis[NB_ENNEMIS_LIGNE][NB_ENNEMIS_COLONNE];
+
 // Fonction pour charger les images
 SDL_Surface* chargerImage(const char* chemin) {
     SDL_Surface* surface = IMG_Load(chemin);
@@ -62,6 +66,16 @@ bool verifierCollision(Entity a, int largeurA, int hauteurA, Entity b, int large
             a.x + largeurA > b.x &&
             a.y < b.y + hauteurB &&
             a.y + hauteurA > b.y);
+}
+bool tousLesEnnemisElimines(Entity ennemis[NB_ENNEMIS_LIGNE][NB_ENNEMIS_COLONNE]) {
+    for (int i = 0; i < NB_ENNEMIS_LIGNE; i++) {
+        for (int j = 0; j < NB_ENNEMIS_COLONNE; j++) {
+            if (ennemis[i][j].actif) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 // Fonction principale du jeu
@@ -105,7 +119,7 @@ void gameLoop(SDL_Surface* screen) {
     Entity joueur = {LARGEUR / 2 - LARGEUR_VAISSEAU / 2, HAUTEUR - HAUTEUR_VAISSEAU - 10, true, true, vaisseau};
 
     // Initialisation des ennemis
-    Entity ennemis[NB_ENNEMIS_LIGNE][NB_ENNEMIS_COLONNE];
+    
     for (int i = 0; i < NB_ENNEMIS_LIGNE; i++) {
         for (int j = 0; j < NB_ENNEMIS_COLONNE; j++) {
             ennemis[i][j].x = i * (LARGEUR_ENNEMI + ESPACEMENT_ENNEMI) + 100;
@@ -278,6 +292,8 @@ void gameLoop(SDL_Surface* screen) {
 
         // Debug : Afficher les coordonnées et le score
         printf("Score: %d | Point de vie: %d\n", score, pointDeVie);
+        
+
     }
 
     // Libération des ressources
@@ -325,10 +341,23 @@ int main(int argc, char* argv[]) {
         gameLoop(screen);
     }
 
+    // Vérifier si tous les ennemis sont éliminés et afficher la sélection d'amélioration
+    if (tousLesEnnemisElimines(ennemis)) {  
+        int choix = amelioration(screen, true);
+        if (choix == 0) {
+            printf("Amélioration sélectionnée : Bouclier\n");
+            // Ajouter le code pour activer le bouclier ici
+        } else if (choix == 1) {
+            printf("Amélioration sélectionnée : Missile puissant\n");
+            // Ajouter le code pour activer les missiles améliorés ici
+        }
+    }
+
     SDL_Quit();
     Mix_CloseAudio();
     IMG_Quit();
 
     return 0;
 }
+
 
