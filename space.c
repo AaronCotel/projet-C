@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include "page_accueil_sdl.h"
+
 
 // Dimensions de la fenêtre
 #define LARGEUR 800
@@ -318,7 +320,10 @@ int main(int argc, char* argv[]) {
 
     srand(time(NULL)); // Initialisation de la graine pour les positions aléatoires
 
-    gameLoop(screen);
+    // Afficher l'écran d'accueil et lancer le jeu si l'utilisateur clique sur "PLAY"
+    if (accueil(screen)) {
+        gameLoop(screen);
+    }
 
     SDL_Quit();
     Mix_CloseAudio();
@@ -326,3 +331,4 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+
