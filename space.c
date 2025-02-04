@@ -7,6 +7,8 @@
 #include <time.h>
 #include "page_accueil_sdl.h"
 #include "amelioration_selection.h"
+#include "options_sdl.h"
+#include "customisation_sdl.h"
 
 
 
@@ -62,11 +64,15 @@ SDL_Surface* chargerImage(const char* chemin) {
 
 // Fonction pour vérifier les collisions
 bool verifierCollision(Entity a, int largeurA, int hauteurA, Entity b, int largeurB, int hauteurB) {
-    return (a.x < b.x + largeurB &&
-            a.x + largeurA > b.x &&
-            a.y < b.y + hauteurB &&
-            a.y + hauteurA > b.y);
+    int centreAx = a.x + largeurA / 2;
+    int centreAy = a.y + hauteurA / 2;
+    int centreBx = b.x + largeurB / 2;
+    int centreBy = b.y + hauteurB / 2;
+
+    return (abs(centreAx - centreBx) < (largeurA / 2 + largeurB / 2)) &&
+           (abs(centreAy - centreBy) < (hauteurA / 2 + hauteurB / 2));
 }
+
 bool tousLesEnnemisElimines(Entity ennemis[NB_ENNEMIS_LIGNE][NB_ENNEMIS_COLONNE]) {
     for (int i = 0; i < NB_ENNEMIS_LIGNE; i++) {
         for (int j = 0; j < NB_ENNEMIS_COLONNE; j++) {
@@ -85,7 +91,7 @@ void gameLoop(SDL_Surface* screen) {
 
     // Chargement des images
     SDL_Surface* fond = chargerImage("Decor.png");
-    SDL_Surface* vaisseau = chargerImage("Joueur.png");
+    SDL_Surface* vaisseau = chargerImage("vaisseau2.png");
     SDL_Surface* ennemiSurface = chargerImage("Ennemi2.png");
     SDL_Surface* bossSurface = chargerImage("Ennemi1.png");
     SDL_Surface* tirSurface = chargerImage("tir.png");
@@ -336,20 +342,19 @@ int main(int argc, char* argv[]) {
 
     srand(time(NULL)); // Initialisation de la graine pour les positions aléatoires
 
-    // Afficher l'écran d'accueil et lancer le jeu si l'utilisateur clique sur "PLAY"
-    if (accueil(screen)) {
-        gameLoop(screen);
-    }
+    // **Boucle principale pour éviter la fermeture immédiate**
+    while (1) {
+        int choix = accueil(screen);
 
-    // Vérifier si tous les ennemis sont éliminés et afficher la sélection d'amélioration
-    if (tousLesEnnemisElimines(ennemis)) {  
-        int choix = amelioration(screen, true);
-        if (choix == 0) {
-            printf("Amélioration sélectionnée : Bouclier\n");
-            // Ajouter le code pour activer le bouclier ici
-        } else if (choix == 1) {
-            printf("Amélioration sélectionnée : Missile puissant\n");
-            // Ajouter le code pour activer les missiles améliorés ici
+        if (choix == 1) {
+            gameLoop(screen); // Lancer le jeu
+        } else if (choix == 2) {
+            customisation(screen); // Aller au menu de customisation
+        } else if (choix == 3) {
+            options(screen); // Aller au menu des options
+        } else {
+            printf("Fermeture du jeu.\n");
+            break; // Quitter la boucle et fermer le programme
         }
     }
 
