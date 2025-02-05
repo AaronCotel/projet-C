@@ -11,7 +11,6 @@
 #include "customisation_sdl.h"
 
 
-
 // Dimensions de la fenêtre
 #define LARGEUR 800
 #define HAUTEUR 600
@@ -41,6 +40,11 @@
 int score = 0;
 int pointDeVie = 10;
 bool gameOver = false;
+int vagueActuelle = 1; // De 1 à 5 pour les rounds ennemis, 6 pour le boss
+int totalVagues = 5;   // Nombre total de vagues avant le boss
+int bouclier = 0; // 0 = pas de bouclier, >0 = nombre de tirs qu'il peut encaisser
+bool missileAmeliore = false; // False = missile normal, True = missile qui détruit 3 ennemis
+
 
 // Structure des entités
 typedef struct {
@@ -64,15 +68,11 @@ SDL_Surface* chargerImage(const char* chemin) {
 
 // Fonction pour vérifier les collisions
 bool verifierCollision(Entity a, int largeurA, int hauteurA, Entity b, int largeurB, int hauteurB) {
-    int centreAx = a.x + largeurA / 2;
-    int centreAy = a.y + hauteurA / 2;
-    int centreBx = b.x + largeurB / 2;
-    int centreBy = b.y + hauteurB / 2;
-
-    return (abs(centreAx - centreBx) < (largeurA / 2 + largeurB / 2)) &&
-           (abs(centreAy - centreBy) < (hauteurA / 2 + hauteurB / 2));
+    return (a.x < b.x + largeurB &&
+            a.x + largeurA > b.x &&
+            a.y < b.y + hauteurB &&
+            a.y + hauteurA > b.y);
 }
-
 bool tousLesEnnemisElimines(Entity ennemis[NB_ENNEMIS_LIGNE][NB_ENNEMIS_COLONNE]) {
     for (int i = 0; i < NB_ENNEMIS_LIGNE; i++) {
         for (int j = 0; j < NB_ENNEMIS_COLONNE; j++) {
@@ -91,7 +91,7 @@ void gameLoop(SDL_Surface* screen) {
 
     // Chargement des images
     SDL_Surface* fond = chargerImage("Decor.png");
-    SDL_Surface* vaisseau = chargerImage("vaisseau2.png");
+    SDL_Surface* vaisseau = chargerImage("Joueur.png");
     SDL_Surface* ennemiSurface = chargerImage("Ennemi2.png");
     SDL_Surface* bossSurface = chargerImage("Ennemi1.png");
     SDL_Surface* tirSurface = chargerImage("tir.png");
@@ -180,11 +180,23 @@ void gameLoop(SDL_Surface* screen) {
             }
             for (int i = 0; i < NB_ENNEMIS_LIGNE; i++) {
                 for (int j = 0; j < NB_ENNEMIS_COLONNE; j++) {
-                    if (ennemis[i][j].actif && verifierCollision((Entity){tir.x, tir.y, true, true, NULL}, LARGEUR_TIR, HAUTEUR_TIR, ennemis[i][j], LARGEUR_ENNEMI, HAUTEUR_ENNEMI)) {
+                    if (ennemis[i][j].actif && verifierCollision(tir, LARGEUR_TIR, HAUTEUR_TIR, ennemis[i][j], LARGEUR_ENNEMI, HAUTEUR_ENNEMI)) {
                         ennemis[i][j].actif = false;
-                        tir.actif = false;
                         score += 10;
+                        tir.actif = false;
+
+                        if (missileAmeliore) {
+                            if (i > 0 && ennemis[i-1][j].actif) { // Ennemi à gauche
+                                ennemis[i-1][j].actif = false;
+                                score += 10;
+                            }
+                            if (i < NB_ENNEMIS_LIGNE - 1 && ennemis[i+1][j].actif) { // Ennemi à droite
+                                ennemis[i+1][j].actif = false;
+                                score += 10;
+                            }
+                        }
                     }
+
                 }
             }
         }
@@ -200,11 +212,42 @@ void gameLoop(SDL_Surface* screen) {
             }
         }
 
-        // Activation du boss si tous les ennemis sont morts
-        if (tousMorts && !boss.actif) {
-            boss.actif = true;
-            boss.y = 0;
+       if (tousMorts) {
+            if (vagueActuelle < totalVagues) {
+                // Afficher l'écran de sélection avant de lancer la vague suivante
+                int choix = amelioration(screen, true);
+
+                if (choix == 0) {
+                    printf("Pouvoir sélectionné : Bouclier\n");
+                    bouclier = 2; // Active un bouclier capable d'encaisser 2 tirs ennemis
+                } else if (choix == 1) {
+                    printf("Pouvoir sélectionné : Missile puissant\n");
+                    missileAmeliore = true; // Active l'effet du missile amélioré
+                }
+
+
+                // Passer à la vague suivante
+                vagueActuelle++;
+                printf("Début de la vague %d !\n", vagueActuelle);
+
+                // Réinitialiser les ennemis pour la nouvelle vague
+                for (int i = 0; i < NB_ENNEMIS_LIGNE; i++) {
+                    for (int j = 0; j < NB_ENNEMIS_COLONNE; j++) {
+                        ennemis[i][j].x = i * (LARGEUR_ENNEMI + ESPACEMENT_ENNEMI) + 100;
+                        ennemis[i][j].y = j * (HAUTEUR_ENNEMI + ESPACEMENT_ENNEMI) + 50;
+                        ennemis[i][j].actif = true;
+                    }
+                }
+            } else {
+                // Après la 5e vague, activer le boss
+                boss.actif = true;
+                boss.y = 0;
+                printf("Le boss est arrivé !\n");
+            }
         }
+
+
+
 
         // Déplacement du boss
         if (boss.actif) {
@@ -246,12 +289,19 @@ void gameLoop(SDL_Surface* screen) {
                 // Collision avec le joueur
                 if (verifierCollision(tirsEnnemis[i], LARGEUR_TIR, HAUTEUR_TIR, joueur, LARGEUR_VAISSEAU, HAUTEUR_VAISSEAU)) {
                     tirsEnnemis[i].actif = false;
-                    pointDeVie--;
-                    if (pointDeVie <= 0) {
-                        gameOver = true;
-                        running = false;
+
+                    if (bouclier > 0) {
+                        bouclier--; // Le bouclier absorbe un tir
+                        printf("Bouclier impacté ! Restant : %d\n", bouclier);
+                    } else {
+                        pointDeVie--;
+                        if (pointDeVie <= 0) {
+                            gameOver = true;
+                            running = false;
+                        }
                     }
                 }
+
             }
         }
 
@@ -260,14 +310,18 @@ void gameLoop(SDL_Surface* screen) {
         SDL_BlitSurface(fond, NULL, screen, NULL);
 
         // Rendu du vaisseau
-        SDL_Rect rectJoueur = {joueur.x, joueur.y, LARGEUR_VAISSEAU, HAUTEUR_VAISSEAU};
+        SDL_Rect rectJoueur = {joueur.x - 80, joueur.y, LARGEUR_VAISSEAU, HAUTEUR_VAISSEAU};
         SDL_BlitSurface(joueur.surface, NULL, screen, &rectJoueur);
 
-        // Rendu des ennemis
+        if (bouclier > 0) {
+            SDL_Rect rectBouclier = {joueur.x - 10, joueur.y - 10, LARGEUR_VAISSEAU + 20, HAUTEUR_VAISSEAU + 20};
+            SDL_FillRect(screen, &rectBouclier, SDL_MapRGB(screen->format, 0, 0, 255)); // Bleu pour le bouclier
+        }
+
         for (int i = 0; i < NB_ENNEMIS_LIGNE; i++) {
             for (int j = 0; j < NB_ENNEMIS_COLONNE; j++) {
                 if (ennemis[i][j].actif) {
-                    SDL_Rect rectEnnemi = {ennemis[i][j].x, ennemis[i][j].y, LARGEUR_ENNEMI, HAUTEUR_ENNEMI};
+                    SDL_Rect rectEnnemi = {ennemis[i][j].x - 60, ennemis[i][j].y, LARGEUR_ENNEMI, HAUTEUR_ENNEMI};
                     SDL_BlitSurface(ennemis[i][j].surface, NULL, screen, &rectEnnemi);
                 }
             }
@@ -275,7 +329,7 @@ void gameLoop(SDL_Surface* screen) {
 
         // Rendu du boss
         if (boss.actif) {
-            SDL_Rect rectBoss = {boss.x, boss.y, LARGEUR_ENNEMI, HAUTEUR_ENNEMI};
+            SDL_Rect rectBoss = {boss.x - 60, boss.y, LARGEUR_ENNEMI, HAUTEUR_ENNEMI};
             SDL_BlitSurface(boss.surface, NULL, screen, &rectBoss);
         }
 
@@ -342,7 +396,7 @@ int main(int argc, char* argv[]) {
 
     srand(time(NULL)); // Initialisation de la graine pour les positions aléatoires
 
-    // **Boucle principale pour éviter la fermeture immédiate**
+    // Afficher l'écran d'accueil et lancer le jeu si l'utilisateur clique sur "PLAY"
     while (1) {
         int choix = accueil(screen);
 
@@ -355,6 +409,18 @@ int main(int argc, char* argv[]) {
         } else {
             printf("Fermeture du jeu.\n");
             break; // Quitter la boucle et fermer le programme
+        }
+    }
+
+    // Vérifier si tous les ennemis sont éliminés et afficher la sélection d'amélioration
+    if (tousLesEnnemisElimines(ennemis)) {  
+        int choix = amelioration(screen, true);
+        if (choix == 0) {
+            printf("Amélioration sélectionnée : Bouclier\n");
+            // Ajouter le code pour activer le bouclier ici
+        } else if (choix == 1) {
+            printf("Amélioration sélectionnée : Missile puissant\n");
+            // Ajouter le code pour activer les missiles améliorés ici
         }
     }
 
